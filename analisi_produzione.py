@@ -21,7 +21,7 @@ for i in range(1, num_lotti + 1):
 
 # Ore lavorative giornaliere e lavoro al sabato
 ore_giornaliere = st.sidebar.number_input("Ore lavorative giornaliere", min_value=4.0, max_value=12.0, step=0.5, value=8.0)
-lavora_sabato = st.sidebar.checkbox("Lavoriamo il sabato? (4 ore fisse)")
+lavora_sabato = st.sidebar.checkbox("Programmato anche sabato? (4 ore fisse)")
 
 giorni_lavorativi = 5 + (1 if lavora_sabato else 0)  # Settimana lavorativa
 
