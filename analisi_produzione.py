@@ -37,7 +37,7 @@ num_fasi_produzione = st.sidebar.number_input("Numero di fasi di produzione", mi
 
 fasi_produzione = {}
 for i in range(1, num_fasi_produzione + 1):
-    fasi_produzione[f'Fase {i}'] = st.sidebar.number_input(f"Ore di lavoro Fase {i}", min_value=0.5, step=0.5)
+    fasi_produzione[f'Fase {i}'] = st.sidebar.number_input(f"Ore di lavoro Fase {i}", min_value=0.1, step=0.1)
 
 # Sezione D: Attività Outsourcing
 st.sidebar.header("Attività di Outsourcing")
