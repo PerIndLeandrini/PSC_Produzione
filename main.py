@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-import io, re
+import io
 from ftplib import FTP, error_perm
 import math
 import re
+import csv
 
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PRD • Raccolta Dati", page_icon="🛠️", layout="wide")
@@ -19,14 +20,10 @@ st.markdown("""
 /* Header clean */
 .prd-header{display:flex;align-items:center;gap:.6rem;margin:0 0 1rem 0}
 .prd-title{font-weight:800;font-size:1.6rem;letter-spacing:-.02em;margin:0;color:#111827}
-
-/* Filtri e pulsanti */
-.prd-toolbar{display:flex;align-items:end;gap:12px;margin:.2rem 0 1rem 0}
-
 /* Card minimal */
 .prd-card{
   border:1px solid #e5e7eb;
-  border-left:6px solid #2563eb; /* accento blu */
+  border-left:6px solid #2563eb;
   border-radius:12px;
   padding:14px 16px;
   margin:12px 0;
@@ -41,7 +38,6 @@ st.markdown("""
 }
 .prd-sep{height:1px;background:#e5e7eb;margin:8px 0}
 .prd-kv{font-size:.9rem;color:#111827}
-
 /* Dataframe full width */
 [data-testid="stDataFrameResizable"]{width:100% !important;}
 </style>
@@ -63,8 +59,10 @@ def ftp_connect() -> FTP:
     return ftp
 
 def ftp_cwd_existing(ftp: FTP, target_dir: str):
-    try: ftp.cwd(target_dir)
-    except Exception as e: raise RuntimeError(f"Impossibile entrare in {target_dir}: {e}")
+    try:
+        ftp.cwd(target_dir)
+    except Exception as e:
+        raise RuntimeError(f"Impossibile entrare in {target_dir}: {e}")
 
 def ftp_download_file(ftp: FTP, filename: str) -> bytes | None:
     bio = io.BytesIO()
@@ -72,24 +70,30 @@ def ftp_download_file(ftp: FTP, filename: str) -> bytes | None:
         ftp.retrbinary(f"RETR {filename}", bio.write)
         return bio.getvalue()
     except error_perm as e:
-        if "550" in str(e): return None
+        if "550" in str(e):
+            return None
         raise
 
 def ftp_upload_file(ftp: FTP, filename: str, payload: bytes):
     bio = io.BytesIO(payload)
     ftp.storbinary(f"STOR {filename}", bio)
 
-# ---------- CSV helpers ----------
+# ---------- CSV lettura/tempo ----------
 def _detect_sep(csv_bytes: bytes, default=";"):
-    if not csv_bytes: return default
-    try: head = csv_bytes.splitlines()[0].decode("utf-8","ignore")
-    except: return default
+    if not csv_bytes:
+        return default
+    try:
+        head = csv_bytes.splitlines()[0].decode("utf-8", "ignore")
+    except Exception:
+        return default
     return ";" if head.count(";") >= head.count(",") else ","
 
 def read_csv_bytes(csv_bytes: bytes | None):
-    if not csv_bytes: return pd.DataFrame(), ";"
+    if not csv_bytes:
+        return pd.DataFrame(), ";"
     sep = _detect_sep(csv_bytes)
-    try: df = pd.read_csv(io.BytesIO(csv_bytes), sep=sep)
+    try:
+        df = pd.read_csv(io.BytesIO(csv_bytes), sep=sep)
     except Exception:
         sep = "," if sep == ";" else ";"
         df = pd.read_csv(io.BytesIO(csv_bytes), sep=sep)
@@ -106,15 +110,6 @@ def to_int_safe(x, default=0):
     except Exception:
         return default
 
-def hhmm_to_minutes(s: str) -> int | None:
-    """Accetta 'H:MM' o 'HH:MM' (anche con spazi)."""
-    try:
-        s = str(s).strip()
-        m = re.match(r"^\s*(\d{1,2})\s*:\s*([0-5]?\d)\s*$", s)
-        if not m: return None
-        return int(m.group(1))*60 + int(m.group(2))
-    except: return None
-
 def minutes_to_hhmm(m) -> str:
     try:
         if pd.isna(m):
@@ -127,19 +122,14 @@ def minutes_to_hhmm(m) -> str:
         return ""
 
 def parse_hhmmss_to_minutes(s: str) -> int | None:
-    """
-    Converte 'HH:MM:SS' o 'HH:MM' (anche con spazi) in minuti.
-    Restituisce None se il formato non combacia.
-    """
+    """Converte 'HH:MM:SS' o 'HH:MM' in minuti; None se non combacia."""
     if s is None:
         return None
     s = str(s).strip()
-    # HH:MM:SS
     m = re.match(r"^\s*(\d{1,3})\s*:\s*([0-5]?\d)\s*:\s*([0-5]?\d)\s*$", s)
     if m:
         hh, mm = int(m.group(1)), int(m.group(2))
         return hh * 60 + mm
-    # HH:MM
     m = re.match(r"^\s*(\d{1,3})\s*:\s*([0-5]?\d)\s*$", s)
     if m:
         hh, mm = int(m.group(1)), int(m.group(2))
@@ -159,41 +149,29 @@ def normalize_time_columns(df: pd.DataFrame) -> pd.DataFrame:
       2) Altrimenti cerca qualunque colonna che contenga 'TEMPO' e prova hh:mm[:ss]
       3) Altrimenti se ci sono ORE + MINUTI, combina.
     """
-    # mappa uppercase -> nome originale
     u2orig = {c.upper().strip(): c for c in df.columns}
-
     tmin = None
 
-    # 1) Caso TEMPO_FASE_MIN presente
     if "TEMPO_FASE_MIN" in u2orig:
         c = u2orig["TEMPO_FASE_MIN"]
         ser = df[c]
-
-        # Se c'è almeno un ":" → trattiamo tutta la colonna come hh:mm[:ss]
         if ser.astype(str).str.contains(":").any():
-            tmin = ser.apply(parse_hhmmss_to_minutes)
-            tmin = pd.Series(tmin, dtype="Int64")
+            tmin = ser.apply(parse_hhmmss_to_minutes).astype("Int64")
         else:
-            # prova come numero di minuti
             tmin = pd.to_numeric(ser, errors="coerce").astype("Int64")
 
-    # 2) Altre colonne con 'TEMPO' (es. TEMPO_FASE, TEMPO)
     if tmin is None:
         tempo_cols = [u2orig[u] for u in u2orig if "TEMPO" in u]
         for c in tempo_cols:
             ser = df[c].astype(str)
             if ser.str.contains(":").any():
-                tmin = ser.apply(parse_hhmmss_to_minutes)
-                tmin = pd.Series(tmin, dtype="Int64")
+                tmin = ser.apply(parse_hhmmss_to_minutes).astype("Int64")
                 break
 
-    # 3) ORE + MINUTI
     if tmin is None and "ORE" in u2orig and "MINUTI" in u2orig:
         h, m = u2orig["ORE"], u2orig["MINUTI"]
-        tmin = df[h].apply(to_int_safe) * 60 + df[m].apply(to_int_safe)
-        tmin = tmin.astype("Int64")
+        tmin = (df[h].apply(to_int_safe) * 60 + df[m].apply(to_int_safe)).astype("Int64")
 
-    # Assegna colonne finali
     if tmin is None:
         df["TEMPO_FASE_MIN"] = pd.Series([pd.NA] * len(df), dtype="Int64")
     else:
@@ -202,22 +180,104 @@ def normalize_time_columns(df: pd.DataFrame) -> pd.DataFrame:
     df["TEMPO_FASE (hh:mm)"] = df["TEMPO_FASE_MIN"].apply(minutes_to_hhmm)
     return df
 
-def append_row(existing_bytes: bytes | None, row: dict) -> bytes:
-    new_df = pd.DataFrame([row])
-    if existing_bytes:
-        old_df, sep = read_csv_bytes(existing_bytes)
-        if not old_df.empty:
-            # allinea colonne
-            for c in new_df.columns:
-                if c not in old_df.columns: old_df[c] = pd.NA
-            for c in old_df.columns:
-                if c not in new_df.columns: new_df[c] = pd.NA
-            df = pd.concat([old_df[new_df.columns], new_df], ignore_index=True)
-        else:
-            df = new_df; sep=";"
-    else:
-        df = new_df; sep=";"
-    out = io.BytesIO(); df.to_csv(out, index=False, sep=sep); return out.getvalue()
+# ---------- NEW: append sicuro via FTP ----------
+def sniff_separator_from_bytes(csv_bytes: bytes, default=";"):
+    if not csv_bytes:
+        return default
+    try:
+        head = csv_bytes.splitlines()[0].decode("utf-8", "ignore")
+    except Exception:
+        return default
+    return ";" if head.count(";") >= head.count(",") else ","
+
+def serialize_row(columns: list[str], row: dict, sep: str) -> str:
+    """Serializza UNA riga rispettando l'ordine colonne e il separatore."""
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=sep, lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([row.get(col, "") for col in columns])
+    return output.getvalue()
+
+def ftp_file_exists_and_size(ftp: FTP, filename: str) -> tuple[bool, int]:
+    try:
+        size = ftp.size(filename)
+        return True, size if size is not None else 0
+    except Exception:
+        return False, 0
+
+def ftp_backup_file(ftp: FTP, filename: str):
+    """Crea una copia del file remoto come filename.bak_YYYYmmddHHMMSS"""
+    try:
+        data = ftp_download_file(ftp, filename)
+        if not data:
+            return
+        stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        bak_name = f"{filename}.bak_{stamp}"
+        ftp_upload_file(ftp, bak_name, data)
+    except Exception:
+        # se fallisce il backup non blocchiamo la scrittura
+        pass
+
+def append_row_safe_via_ftp(ftp: FTP, filename: str, row: dict, preferred_columns: list[str] = None):
+    """
+    Appende una riga al CSV remoto in modo sicuro:
+    - se non esiste: crea header + prima riga
+    - se esiste: appende UNA riga via APPE
+    - se il file esiste ma non è leggibile -> ABORT (non sovrascrivo)
+    """
+    exists, size = ftp_file_exists_and_size(ftp, filename)
+
+    if not exists or size == 0:
+        cols = preferred_columns or list(row.keys())
+        sep = ";"
+        header = (sep.join(cols) + "\n").encode("utf-8")
+        line   = serialize_row(cols, row, sep).encode("utf-8")
+        ftp_upload_file(ftp, filename, header + line)
+        return
+
+    data = ftp_download_file(ftp, filename)
+    if not data:
+        raise RuntimeError("Il file remoto esiste ma non è leggibile (download vuoto). Append annullato per sicurezza.")
+
+    sep = sniff_separator_from_bytes(data, default=";")
+    try:
+        first_line = data.splitlines()[0].decode("utf-8", "ignore")
+        cols = [c.strip() for c in first_line.split(sep)]
+    except Exception:
+        raise RuntimeError("Header esistente non leggibile. Append annullato per evitare corruzioni.")
+
+    # allinea il dict riga alle colonne note
+    for c in cols:
+        row.setdefault(c, "")
+
+    # backup prima di scrivere (non obbligatorio ma utile)
+    ftp_backup_file(ftp, filename)
+
+    # APPE: aggiungi una sola riga in coda
+    line_str = serialize_row(cols, row, sep)
+    bio = io.BytesIO(line_str.encode("utf-8"))
+    ftp.storbinary(f"APPE {filename}", bio)
+
+def get_next_ciclo_nr_from_server() -> int:
+    """
+    Legge il CSV remoto e calcola il prossimo CICLO_NR (max numerico + 1).
+    Se il file non esiste o non è leggibile → 1.
+    """
+    try:
+        ftp = ftp_connect()
+        ftp_cwd_existing(ftp, PRIMARY_DIR)
+        data = ftp_download_file(ftp, REMOTE_FILE)
+        ftp.quit()
+        if not data:
+            return 1
+        df, _ = read_csv_bytes(data)
+        if "CICLO_NR" not in df.columns or df.empty:
+            return 1
+        # prova a convertire a numerico (ignora righe non numeriche)
+        nums = pd.to_numeric(df["CICLO_NR"], errors="coerce")
+        current_max = int(nums.max()) if pd.notna(nums.max()) else 0
+        return max(current_max + 1, 1)
+    except Exception:
+        return 1
 
 # ---------- SIDEBAR ----------
 with st.sidebar:
@@ -235,54 +295,75 @@ with st.sidebar:
 # ---------- SCRITTURA ----------
 if mode == "✍️ Scrittura":
     st.subheader("✍️ Inserisci dati")
-    operatore = st.selectbox("Operatore", OPERATORI, 0)
+
+    # Pre-calcolo progressivo ciclo
+    next_ciclo_nr = get_next_ciclo_nr_from_server()
+
+    operatore   = st.selectbox("Operatore", OPERATORI, 0)
     data_lavoro = st.date_input("Data", value=date.today(), format="DD/MM/YYYY")
 
     st.markdown("#### Dati tecnici")
     c1, c2 = st.columns([2,3])
     with c1: codice_materiale = st.text_input("CODICE Materiale").upper()
-    with c2: descrizione = st.text_input("DESCRIZIONE")
+    with c2: descrizione      = st.text_input("DESCRIZIONE")
+
     c3, c4, c5 = st.columns(3)
-    with c3: ciclo_nr = st.text_input("CICLO NR")
-    with c4: macchina = st.selectbox("MACCHINA",
+    # CICLO_NR: auto-progressivo, non modificabile
+    with c3: 
+        ciclo_nr = st.number_input("CICLO NR (auto)", min_value=1, value=next_ciclo_nr, step=1, disabled=True)
+    with c4: 
+        macchina = st.selectbox("MACCHINA",
             ["DMG MORI","TAKISAWA","QUASER","MAZAK VCN","MAZAK VRX","MAZAK HCN","HYUNDAI","HURCO"], 0)
-    with c5: fase = st.selectbox("FASE",
+    with c5: 
+        fase = st.selectbox("FASE",
             ["Fase 1","Fase 2","Fase 3","Fase 4","Fase 5","Fase 6","Attrezzaggio","Programmazione"], 0)
+
     c6, c7, c8 = st.columns(3)
     with c6: numero_prg = st.text_input("NUMERO PRG")
-    with c7: cartella_mac = st.text_input("CARTELLA MACCHINA")
+    with c7:
+        cartella_mac = st.selectbox("CARTELLA MACCHINA",
+                                    ["WASS", "EL.EN", "DUMAREY", "VARIE"], 0)
     with c8:
-        st.markdown("Tempo fase (hh:mm)")
-        ore = st.number_input("Ore", 0, 24, 0, 1, label_visibility="collapsed")
-        minuti = st.number_input("Minuti", 0, 59, 0, 1, label_visibility="collapsed")
+        # NUOVO: un solo campo espresso in minuti
+        tempo_min_input = st.number_input("Tempo fase (minuti)", min_value=0, value=0, step=1)
 
     if st.button("📩 Invia"):
         missing = []
         if not codice_materiale: missing.append("CODICE Materiale")
-        if not descrizione: missing.append("DESCRIZIONE")
-        if not fase: missing.append("FASE")
+        if not descrizione:      missing.append("DESCRIZIONE")
+        if not fase:             missing.append("FASE")
         if missing:
             st.error("Compila: " + ", ".join(missing))
         else:
-            tot_min = to_int_safe(ore)*60 + to_int_safe(minuti)
+            # Tempo: l'utente inserisce minuti → salviamo come HH:MM:SS
+            min_tot = to_int_safe(tempo_min_input)
+            h = min_tot // 60
+            m = min_tot % 60
+            tempo_str = f"{h}:{m:02d}:00"  # es. 120 → "2:00:00"
+
             record = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "OPERATORE": operatore,
                 "DATA": data_lavoro.strftime("%Y-%m-%d"),
                 "CODICE_MATERIALE": std(codice_materiale),
                 "DESCRIZIONE": std(descrizione),
-                "CICLO_NR": std(ciclo_nr),
+                "CICLO_NR": int(ciclo_nr),              # auto-progressivo calcolato sopra
                 "MACCHINA": std(macchina),
                 "NUMERO_PRG": std(numero_prg),
                 "CARTELLA_MACCHINA": std(cartella_mac),
                 "FASE": std(fase),
-                "TEMPO_FASE_MIN": tot_min,
+                "TEMPO_FASE_MIN": tempo_str,           # salviamo in HH:MM:SS per compatibilità storica
             }
+
             try:
                 ftp = ftp_connect(); ftp_cwd_existing(ftp, PRIMARY_DIR)
-                existing = ftp_download_file(ftp, REMOTE_FILE)
-                updated  = append_row(existing, record)
-                ftp_upload_file(ftp, REMOTE_FILE, updated)
+                append_row_safe_via_ftp(
+                    ftp, REMOTE_FILE, record,
+                    preferred_columns=[
+                        "Timestamp","OPERATORE","DATA","CODICE_MATERIALE","DESCRIZIONE","CICLO_NR",
+                        "MACCHINA","NUMERO_PRG","CARTELLA_MACCHINA","FASE","TEMPO_FASE_MIN"
+                    ]
+                )
                 where = ftp.pwd(); ftp.quit()
                 st.success(f"✅ Salvato in: {where}/{REMOTE_FILE}")
                 st.balloons()
@@ -293,7 +374,6 @@ if mode == "✍️ Scrittura":
 else:
     st.subheader("📘 Consultazione dati")
 
-    # leggi CSV
     try:
         ftp = ftp_connect(); ftp_cwd_existing(ftp, PRIMARY_DIR)
         csv_bytes = ftp_download_file(ftp, REMOTE_FILE); here = ftp.pwd(); ftp.quit()
@@ -322,23 +402,39 @@ else:
 
         st.markdown("### 🔎 Filtra")
         with st.container():
-            col1,col2,col3,col4,col5 = st.columns([1,1.2,2,1.1,.9])
-            with col1: ss.flt_operatore = st.selectbox("Operatore", ["(tutti)"]+OPERATORI,
-                                                       index=(["(tutti)"]+OPERATORI).index(ss.flt_operatore))
-            with col2: ss.flt_codice = st.text_input("CODICE Materiale contiene", ss.flt_codice)
-            with col3: ss.flt_descr  = st.text_input("DESCRIZIONE contiene", ss.flt_descr)
-            with col4: ss.flt_data   = st.date_input("Solo data", value=ss.flt_data)
+            col1, col2, col3, col4, col5, col6 = st.columns([1, 1.2, 2, 1.1, 1.3, .9])
+            with col1:
+                ss.flt_operatore = st.selectbox(
+                    "Operatore", ["(tutti)"] + OPERATORI,
+                    index=(["(tutti)"] + OPERATORI).index(ss.flt_operatore)
+                )
+            with col2:
+                ss.flt_codice = st.text_input("CODICE Materiale contiene", ss.flt_codice)
+            with col3:
+                ss.flt_descr = st.text_input("DESCRIZIONE contiene", ss.flt_descr)
+            with col4:
+                ss.flt_cartella = st.text_input("CARTELLA contiene", ss.get("flt_cartella", ""))
             with col5:
+                ss.flt_data = st.date_input("Solo data", value=ss.flt_data)
+            with col6:
                 if st.button("↺ Reset filtri"):
-                    ss.flt_operatore="(tutti)"; ss.flt_codice=""; ss.flt_descr=""; ss.flt_data=None; st.rerun()
+                    ss.flt_operatore = "(tutti)"
+                    ss.flt_codice = ""
+                    ss.flt_descr = ""
+                    ss.flt_cartella = ""
+                    ss.flt_data = None
+                    st.rerun()
 
         # applica filtri
         fdf = df.copy()
         if ss.flt_operatore!="(tutti)" and "OPERATORE" in fdf: fdf = fdf[fdf["OPERATORE"]==ss.flt_operatore]
         if ss.flt_codice and "CODICE_MATERIALE" in fdf:
-            fdf = fdf[fdf["CODICE_MATERIALE"].astype(str).str.contains(re.escape(ss.flt_codice), case=False, regex=True)]
-        if ss.flt_descr and "DESCRIZIONE" in fdf:
-            fdf = fdf[fdf["DESCRIZIONE"].astype(str).str.contains(re.escape(ss.flt_descr), case=False, regex=True)]
+            fdf = fdf["CODICE_MATERIALE"].astype(str).str.contains(re.escape(ss.flt_codice), case=False, regex=True)
+            fdf = df[fdf]
+        if ss.flt_descr and "DESCRIZIONE" in df:
+            mask = df["DESCRIZIONE"].astype(str).str.contains(re.escape(ss.flt_descr), case=False, regex=True)
+            df = df[mask]
+            fdf = df
         if ss.flt_data and "DATA" in fdf:
             fdf = fdf[fdf["DATA"]==ss.flt_data.strftime("%Y-%m-%d")]
 
