@@ -11,7 +11,7 @@ import csv
 st.set_page_config(page_title="PRD • Raccolta Dati", page_icon="🛠️", layout="wide")
 PRIMARY_DIR  = "/httpdocs/IA/luppichini/PRD"
 REMOTE_FILE  = "Dati_PRD_Alessio.csv"
-OPERATORI    = ["ALESSIO", "ALESSANDRO", "MICHELE", "LUCA"]
+OPERATORI    = ["ALESSIO", "ALESSANDRO", "LUCA", "MICHELE", "VALERIO"]
 
 # ---------- STILE CLEAN ----------
 st.markdown("""
@@ -474,3 +474,4 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
