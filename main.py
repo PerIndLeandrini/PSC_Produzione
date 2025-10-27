@@ -15,9 +15,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"   # 👈 forza il cassetto su mobile
 )
 
-# ---------- CONFIG ----------
-st.set_page_config(page_title="PRD • Raccolta Dati", page_icon="🛠️", layout="wide")
-
 # ---------- AUTH (minimal, prima di qualsiasi UI/FTP) ----------
 def _build_credentials_from_secrets():
     auth = st.secrets["auth"]
@@ -105,6 +102,34 @@ st.markdown("""
 /* Dataframe full width */
 [data-testid="stDataFrameResizable"]{width:100% !important;}
 </style>
+st.markdown("""
+<style>
+/* Assicura che l'header con l'hamburger resti visibile su mobile */
+header, [data-testid="stHeader"], [data-testid="stToolbar"] {
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Mantieni visibile il pulsante che apre/chiude la sidebar */
+[data-testid="collapsedControl"] {
+  display: block !important;
+}
+
+/* Forza la sidebar aperta su schermi piccoli (opzionale ma utile) */
+@media (max-width: 768px) {
+  [data-testid="stSidebar"] {
+    transform: translateX(0%) !important;   /* niente slide fuori schermo */
+    visibility: visible !important;
+  }
+  /* Evita che il contenuto principale si “infili” sotto la sidebar */
+  [data-testid="stAppViewContainer"] {
+    margin-left: 260px !important; /* larghezza tipica sidebar */
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
 """, unsafe_allow_html=True)
 
 # ---------- HEADER ----------
@@ -629,5 +654,6 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
 
 
