@@ -314,7 +314,7 @@ def get_next_ciclo_nr_from_server() -> int:
 
 # ---------- SIDEBAR ----------
 with st.sidebar:
-    mode = st.radio("Modalità", ["✍️ Scrittura", "📖 Lettura"], index=1)
+    mode = st.radio("Modalità", ["✍️ Scrittura", "📖 Lettura", "📝 Modifica"], index=1)
     if st.button("🔎 Verifica accesso"):
         try:
             ftp = ftp_connect(); root_pwd = ftp.pwd()
@@ -326,7 +326,7 @@ with st.sidebar:
             st.error(f"Verifica fallita: {e}")
 
 # ---------- SCRITTURA ----------
-# ---------- SCRITTURA ----------
+
 if mode == "✍️ Scrittura":
     st.subheader("✍️ Inserisci dati")
 
@@ -411,6 +411,113 @@ if mode == "✍️ Scrittura":
                 st.balloons()
             except Exception as e:
                 st.error(f"❌ Errore salvataggio su FTP: {e}")
+
+elif mode == "📝 Modifica":
+    st.subheader("📝 Modifica dati esistenti")
+
+    # --- carica dataset da FTP ---
+    try:
+        ftp = ftp_connect()
+        ftp_cwd_existing(ftp, PRIMARY_DIR)
+        csv_bytes = ftp_download_file(ftp, REMOTE_FILE)
+        ftp.quit()
+        if not csv_bytes:
+            st.warning("Nessun dato disponibile per la modifica.")
+            st.stop()
+        df, sep = read_csv_bytes(csv_bytes)
+        df.columns = [c.strip() for c in df.columns]
+        if "TEMPO_FASE_MIN" not in df.columns:
+            df["TEMPO_FASE_MIN"] = ""
+    except Exception as e:
+        st.error(f"Errore durante il caricamento: {e}")
+        st.stop()
+
+    # --- FILTRI DI RICERCA ---
+    st.markdown("### 🔎 Ricerca record")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: flt_codice = st.text_input("CODICE Materiale contiene")
+    with col2: flt_descr  = st.text_input("DESCRIZIONE contiene")
+    with col3: flt_ciclo  = st.text_input("CICLO NR esatto")
+    with col4: flt_prg    = st.text_input("NUMERO PRG contiene")
+
+    avvia_ricerca = st.button("🔍 RICERCA")
+
+    # --- SE L’UTENTE NON HA ANCORA CERCATO ---
+    if not avvia_ricerca:
+        st.info("Inserisci uno o più criteri di ricerca, poi premi **RICERCA** per visualizzare i record modificabili.")
+        st.stop()
+
+    # --- FILTRA IL DATAFRAME ---
+    fdf = df.copy()
+    if flt_codice:
+        fdf = fdf[fdf["CODICE_MATERIALE"].astype(str).str.contains(re.escape(flt_codice), case=False, regex=True)]
+    if flt_descr:
+        fdf = fdf[fdf["DESCRIZIONE"].astype(str).str.contains(re.escape(flt_descr), case=False, regex=True)]
+    if flt_ciclo:
+        fdf = fdf[fdf["CICLO_NR"].astype(str) == flt_ciclo.strip()]
+    if flt_prg:
+        fdf = fdf[fdf["NUMERO_PRG"].astype(str).str.contains(re.escape(flt_prg), case=False, regex=True)]
+
+    # --- NESSUN RECORD TROVATO ---
+    if fdf.empty:
+        st.warning("⚠️ Nessun record trovato con i criteri indicati.")
+        st.stop()
+
+    # --- MOSTRA AREA DI MODIFICA ---
+    st.markdown(f"### ✏️ Record trovati: {len(fdf)} — Modifica i campi e salva")
+    for idx, r in fdf.iterrows():
+        st.markdown(f"<div class='prd-sep'></div>", unsafe_allow_html=True)
+        with st.form(f"edit_{idx}"):
+            st.markdown(f"#### 🔧 Modifica — CICLO {r.get('CICLO_NR','')} | {r.get('CODICE_MATERIALE','')}")
+
+            col1, col2 = st.columns([2,3])
+            with col1: codice_materiale = st.text_input("CODICE Materiale", r["CODICE_MATERIALE"], key=f"cod_{idx}")
+            with col2: descrizione = st.text_input("DESCRIZIONE", r["DESCRIZIONE"], key=f"desc_{idx}")
+
+            col3, col4, col5 = st.columns(3)
+            with col3: ciclo_nr = st.number_input("CICLO NR", min_value=1, value=int(r["CICLO_NR"]), step=1, key=f"ciclo_{idx}")
+            with col4: macchina  = st.text_input("MACCHINA", r["MACCHINA"], key=f"mac_{idx}")
+            with col5: fase      = st.text_input("FASE", r["FASE"], key=f"fase_{idx}")
+
+            col6, col7, col8 = st.columns(3)
+            with col6: numero_prg = st.text_input("NUMERO PRG", r["NUMERO_PRG"], key=f"prg_{idx}")
+            with col7: cartella_mac = st.text_input("CARTELLA MACCHINA", r["CARTELLA_MACCHINA"], key=f"cart_{idx}")
+            with col8: tempo_min = st.text_input("Tempo fase (hh:mm:ss)", r["TEMPO_FASE_MIN"], key=f"time_{idx}")
+
+            submitted = st.form_submit_button("💾 Salva")
+
+        if submitted:
+            updated_row = r.to_dict()
+            updated_row.update({
+                "CODICE_MATERIALE": codice_materiale,
+                "DESCRIZIONE": descrizione,
+                "CICLO_NR": ciclo_nr,
+                "MACCHINA": macchina,
+                "FASE": fase,
+                "NUMERO_PRG": numero_prg,
+                "CARTELLA_MACCHINA": cartella_mac,
+                "TEMPO_FASE_MIN": tempo_min,
+            })
+
+            key = r["Timestamp"]
+            df.loc[df["Timestamp"] == key] = updated_row
+
+            # --- SALVATAGGIO SU FTP ---
+            try:
+                out = io.BytesIO()
+                df.to_csv(out, index=False, sep=sep)
+                ftp = ftp_connect()
+                ftp_cwd_existing(ftp, PRIMARY_DIR)
+                ftp_backup_file(ftp, REMOTE_FILE)
+                ftp_upload_file(ftp, REMOTE_FILE, out.getvalue())
+                ftp.quit()
+                st.success(f"✅ Riga con CICLO {r.get('CICLO_NR','')} salvata correttamente!")
+            except Exception as e:
+                st.error(f"❌ Errore nel salvataggio della riga {idx+1}: {e}")
+
+    else:
+        st.dataframe(fdf, use_container_width=True, height=500)
+        st.info("Filtra ulteriormente per ottenere un solo record da modificare.")
 
 # ---------- LETTURA ----------
 else:
