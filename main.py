@@ -326,6 +326,7 @@ with st.sidebar:
             st.error(f"Verifica fallita: {e}")
 
 # ---------- SCRITTURA ----------
+# ---------- SCRITTURA ----------
 if mode == "✍️ Scrittura":
     st.subheader("✍️ Inserisci dati")
 
@@ -341,7 +342,19 @@ if mode == "✍️ Scrittura":
 
     c3, c4, c5 = st.columns(3)
     with c3:
-        ciclo_nr = st.number_input("CICLO NR (auto)", min_value=1, value=next_ciclo_nr, step=1, disabled=True)
+        # ✅ SUGGERITO ma EDITABILE (niente disabled)
+        ciclo_nr = st.number_input(
+            "CICLO NR (suggerito)",
+            min_value=1,
+            value=next_ciclo_nr,
+            step=1
+        )
+        if ciclo_nr < next_ciclo_nr:
+            st.warning(
+                "Il valore è inferiore al suggerito (storico massimo + 1). "
+                "Attenzione a possibili duplicati già usati in passato."
+            )
+
     with c4:
         macchina = st.selectbox("MACCHINA",
             ["DMG MORI","TAKISAWA","QUASER","MAZAK VCN","MAZAK VRX","MAZAK HCN","HYUNDAI","HURCO"], 0)
@@ -502,3 +515,4 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
