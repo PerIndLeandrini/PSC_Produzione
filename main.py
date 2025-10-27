@@ -8,6 +8,13 @@ import re
 import csv
 import streamlit_authenticator as stauth  # <— NEW
 
+st.set_page_config(
+    page_title="PRD • Raccolta Dati",
+    page_icon="🛠️",
+    layout="wide",
+    initial_sidebar_state="expanded"   # 👈 forza il cassetto su mobile
+)
+
 # ---------- CONFIG ----------
 st.set_page_config(page_title="PRD • Raccolta Dati", page_icon="🛠️", layout="wide")
 
@@ -622,4 +629,5 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
 
