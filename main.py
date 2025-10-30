@@ -407,7 +407,7 @@ if mode == "✍️ Scrittura":
                     ]
                 )
                 where = ftp.pwd(); ftp.quit()
-                st.success(f"✅ Salvato in: {where}/{REMOTE_FILE}")
+                st.success(f"✅ Tutto salavato, visto non è difficile, se ci riesce MICHELE!!!")
                 st.balloons()
             except Exception as e:
                 st.error(f"❌ Errore salvataggio su FTP: {e}")
@@ -622,4 +622,5 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
 
