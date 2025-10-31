@@ -360,7 +360,7 @@ if mode == "✍️ Scrittura":
             ["DMG MORI","TAKISAWA","QUASER","MAZAK VCN 600","MAZAK VCN 530c", "MAZAK VRX","MAZAK HCN","HYUNDAI","HURCO"], 0)
     with c5:
         fase = st.selectbox("FASE",
-            ["Fase 1","Fase 2","Fase 3","Fase 4","Fase 5","Fase 6","Attrezzaggio","Programmazione"], 0)
+            ["Fase 1","Fase 2","Fase 3","Fase 4","Fase 5","Fase 6","Preparazione","Attrezzaggio","Programmazione"], 0)
 
     c6, c7, c8 = st.columns(3)
     with c6: numero_prg = st.text_input("NUMERO PRG")
@@ -622,6 +622,7 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
 
 
 
