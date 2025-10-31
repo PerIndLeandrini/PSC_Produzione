@@ -357,7 +357,7 @@ if mode == "✍️ Scrittura":
 
     with c4:
         macchina = st.selectbox("MACCHINA",
-            ["DMG MORI","TAKISAWA","QUASER","MAZAK VCN","MAZAK VRX","MAZAK HCN","HYUNDAI","HURCO"], 0)
+            ["DMG MORI","TAKISAWA","QUASER","MAZAK VCN 600","MAZAK VCN 530c", "MAZAK VRX","MAZAK HCN","HYUNDAI","HURCO"], 0)
     with c5:
         fase = st.selectbox("FASE",
             ["Fase 1","Fase 2","Fase 3","Fase 4","Fase 5","Fase 6","Attrezzaggio","Programmazione"], 0)
@@ -622,5 +622,6 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
 
 
