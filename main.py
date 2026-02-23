@@ -68,7 +68,7 @@ _role = _credentials["usernames"][username]["role"]
 # ---------- COSTANTI APP (dopo login) ----------
 PRIMARY_DIR  = "/httpdocs/IA/luppichini/PRD"
 REMOTE_FILE  = "Dati_PRD_Alessio.csv"
-OPERATORI    = ["ALESSIO", "ALESSANDRO", "LUCA", "MICHELE", "VALERIO"]
+OPERATORI    = ["ALESSIO", "ALE_SERAP", "ALESSANDRO", "LUCA", "MICHELE", "VALERIO"]
 
 # ---------- STILE CLEAN ----------
 st.markdown("""
@@ -622,6 +622,7 @@ else:
             file_name="estratto_prd.csv",
             mime="text/csv",
         )
+
 
 
 
