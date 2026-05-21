@@ -110,7 +110,7 @@ st.markdown(f"""
 
 # ---------- FTP ----------
 def ftp_connect() -> FTP:
-    ftp = FTP(st.secrets["FTP_HOST"], timeout=25)
+    ftp = FTP(st.secrets["FTP_HOST"], timeout=90)
     ftp.set_pasv(True)
     ftp.login(user=st.secrets["FTP_USER"], passwd=st.secrets["FTP_PASS"])
     return ftp
