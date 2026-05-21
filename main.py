@@ -253,27 +253,26 @@ def ftp_file_exists_and_size(ftp: FTP, filename: str) -> tuple[bool, int]:
     except Exception:
         return False, 0
 
-
 def ftp_backup_file(ftp: FTP, filename: str):
     try:
         data = ftp_download_file(ftp, filename)
         if not data:
             return
 
-        # Un solo backup al giorno
         stamp = datetime.now().strftime("%Y%m%d")
         bak_name = f"{filename}.bak_{stamp}"
 
-        # Se il backup di oggi esiste già, non lo ricrea
         exists, _ = ftp_file_exists_and_size(ftp, bak_name)
         if exists:
             return
 
         ftp_upload_file(ftp, bak_name, data)
+        ftp_cleanup_old_backups(ftp, filename, keep_last=7)
 
     except Exception:
         pass
         
+
 def append_row_safe_via_ftp(ftp: FTP, filename: str, row: dict, preferred_columns: list[str] = None):
     exists, size = ftp_file_exists_and_size(ftp, filename)
 
